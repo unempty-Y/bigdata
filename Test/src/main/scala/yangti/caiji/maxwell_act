@@ -1,0 +1,15 @@
+修改Mysql的my.cnf
+log-bin=bin-log
+binlog_format=row
+
+拷贝Maxwell配置文件config.properties.example为config.properties
+修改
+producer=kafka
+kafka.bootstrap.servers=bigdata1:9092
+kafka_topic=XXXX (自行添加此行)
+host=bigdata1
+user=root
+password=123456
+
+启动
+bin/maxwell --config ./config.properties

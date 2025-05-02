@@ -1,0 +1,170 @@
+package moni.mn3
+
+import org.apache.flink.api.common.eventtime.WatermarkStrategy
+import org.apache.flink.api.common.restartstrategy.RestartStrategies
+import org.apache.flink.api.common.serialization.SimpleStringSchema
+import org.apache.flink.api.common.state.{ListState, ListStateDescriptor, ValueState, ValueStateDescriptor}
+import org.apache.flink.connector.kafka.source.KafkaSource
+import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer
+import org.apache.flink.streaming.api.TimeCharacteristic
+import org.apache.flink.streaming.api.functions.ProcessFunction
+import org.apache.flink.streaming.api.functions.timestamps.BoundedOutOfOrdernessTimestampExtractor
+import org.apache.flink.streaming.api.functions.windowing.WindowFunction
+import org.apache.flink.streaming.api.scala._
+import org.apache.flink.streaming.api.windowing.assigners.TumblingProcessingTimeWindows
+import org.apache.flink.streaming.api.windowing.time.Time
+import org.apache.flink.streaming.api.windowing.windows.TimeWindow
+import org.apache.flink.streaming.connectors.redis.RedisSink
+import org.apache.flink.streaming.connectors.redis.common.config.FlinkJedisPoolConfig
+import org.apache.flink.streaming.connectors.redis.common.mapper.{RedisCommand, RedisCommandDescription, RedisMapper}
+import org.apache.flink.util.Collector
+import org.json4s.JValue
+import org.json4s.JsonAST._
+import org.json4s.jackson.JsonMethods
+
+import java.lang
+import java.text.SimpleDateFormat
+
+object D_2_2 {
+  private val Bigdata1 = "192.168.45.16"
+  private val BootstrapServers = s"$Bigdata1:9092"
+  val MaxOutOfOrderness: Long = 5 * 1000L
+  // "已发货", "已付款", "已下单","已签收",
+  val tuple = Array("已发货", "已签收")
+
+  case class Order_master_data(
+                                order_id: Long,
+                                //                                order_sn: Long,
+                                //                                customer_id: Long,
+                                //                                shipping_user: String,
+                                //                                province: String,
+                                //                                city: String,
+                                //                                address: String,
+                                //                                order_source: String,
+                                //                                payment_method: Int,
+                                //                                order_money: Double,
+                                //                                district_money: Double,
+                                //                                shipping_money: Double,
+                                payment_money: Double,
+                                //                                shipping_comp_name: String,
+                                //                                shipping_sn: Long,
+                                create_time: Long,
+                                //                                shipping_time: Long,
+                                //                                pay_time: Long,
+                                //                                receive_time: Long,
+                                order_status: String,
+                                //                                order_point: Int,
+                                //                                invoice_title: String,
+                                modified_time: Long
+                              )
+
+  def main(args: Array[String]): Unit = {
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+    env.setParallelism(1)
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
+    env.enableCheckpointing(40000)
+    env.setRestartStrategy(RestartStrategies.fixedDelayRestart(10, 1))
+    val kafkaSource = KafkaSource.builder[String]
+      .setBootstrapServers(BootstrapServers)
+      .setTopics("ods_mall_data")
+      .setStartingOffsets(OffsetsInitializer.earliest())
+      .setValueOnlyDeserializer(new SimpleStringSchema())
+      .build()
+
+    val timeformat = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss")
+    val dataStream = env.fromSource(kafkaSource, WatermarkStrategy.noWatermarks[String], "kafka source")
+      .filter(line => line.contains("order_master"))
+      .map(line => {
+        val str: JValue = JsonMethods.parse(line, useBigDecimalForDouble = true)
+        val JInt(order_id): JValue = str \\ "order_id"
+        val JDecimal(payment_money): JValue = str \\ "payment_money"
+        val JString(create_time): JValue = str \\ "create_time"
+        val JString(order_status): JValue = str \\ "order_status"
+        val JString(modified_time): JValue = str \\ "modified_time"
+        Order_master_data(order_id.toLong, payment_money.toDouble, create_time.toLong, order_status, if (modified_time == null) create_time.toLong else timeformat.parse(modified_time).getTime)
+      })
+      //      .assignTimestampsAndWatermarks(new OrederTime)
+      .keyBy(_ => true)
+      .process(new top2User)
+
+    val config = new FlinkJedisPoolConfig.Builder()
+      .setHost(Bigdata1)
+      .setPort(6379)
+      .build()
+    val cancel = (dataStream.filter(_.contains("cancelrate")).map((_, 1)).keyBy(_ => true)
+      .window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
+      .sum(1))
+      .join(dataStream.map((_, 1)).keyBy(_ => true)
+        .window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
+        .sum(1))
+      .where(_ => 1)
+      .equalTo(_ => 1)
+      .window(TumblingProcessingTimeWindows.of(Time.minutes(1)))
+      .apply((x, y) => (x._2, y._2))
+      .map(data =>{
+        val d = (data._1.toDouble / data._2.toDouble) * 100
+        ("cancelrate", f"${d}%.2f" + "%")})
+        cancel
+      .print()
+    cancel.addSink(new RedisSink[(String, String)](config, new RedisSinkmapper))
+
+    val top2 = dataStream.filter(_.contains("top2userconsumption"))
+      .map(a => ("top2userconsumption", s"[${a(0)},${a(1)}]"))
+        top2.addSink(new RedisSink[(String, String)](config, new RedisSinkmapper))
+    env.execute("flink1")
+  }
+
+  class OrederTime extends BoundedOutOfOrdernessTimestampExtractor[Order_master_data](Time.seconds(MaxOutOfOrderness)) {
+    override def extractTimestamp(t: Order_master_data): Long = scala.math.max(t.create_time, t.modified_time)
+  }
+
+  class PaymentCount extends ProcessFunction[Order_master_data, (String, Double)] {
+    lazy val PaymentCount: ValueState[Double] = getRuntimeContext.getState(new ValueStateDescriptor[Double]("Ordercount", classOf[Double]))
+
+    override def processElement(i: Order_master_data,
+                                context: ProcessFunction[Order_master_data, (String, Double)]#Context,
+                                collector: Collector[(String, Double)]): Unit = {
+      if (tuple.contains(i.order_status)) {
+        PaymentCount.update(PaymentCount.value() + i.payment_money)
+        collector.collect("totalprice", PaymentCount.value())
+      }
+      else if (i.order_status.contains("已下单")) collector.collect("totalrefundordercount", i.payment_money)
+    }
+  }
+
+  class top2User extends ProcessFunction[Order_master_data, List[String]] {
+    lazy val valueStateList: ListState[(Long, Double)] = getRuntimeContext.getListState(new ListStateDescriptor[(Long, Double)]("valueStateList", classOf[(Long, Double)]))
+
+    override def processElement(i: Order_master_data, context: ProcessFunction[Order_master_data, List[String]]#Context, collector: Collector[List[String]]): Unit = {
+      if (tuple.contains(i.order_status)) {
+        valueStateList.add((i.order_id, i.payment_money))
+        import scala.collection.JavaConverters._
+        val valueList = valueStateList.get()
+          .asScala
+          .toList
+          //根据商品Id分组累加
+          .groupBy(_._1)
+          .mapValues(_.map(_._2).sum)
+          .toList
+          //根据商品销售总额排序
+          .sortBy(_._2).reverse
+        valueStateList.clear()
+        valueStateList.addAll(valueList.asJava)
+        val output = valueList.map(line => s"${line._1}:${line._2}") :+ "null" :+ "top2userconsumption"
+        collector.collect(output)
+      }
+      else if (i.order_status.contains("已下单"))
+        collector.collect(List("cancelrate"))
+
+    }
+  }
+
+
+  class RedisSinkmapper extends RedisMapper[(String, String)] {
+    override def getCommandDescription: RedisCommandDescription = new RedisCommandDescription(RedisCommand.SET)
+
+    override def getKeyFromData(t: (String, String)): String = t._1
+
+    override def getValueFromData(t: (String, String)): String = t._2
+  }
+}

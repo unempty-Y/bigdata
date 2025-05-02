@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project version="4">
+  <component name="Encoding">
+    <file url="file://$PROJECT_DIR$/FlinkHandlerHelper/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FlinkHandlerHelper/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/FlinkHandlerHelper/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/HbaseConnect/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/HbaseConnect/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/HbaseConnect/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/HudiConnect/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/HudiConnect/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/HudiConnect/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JdbcConnect/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JdbcConnect/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/JdbcConnect/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/KafkaConnect/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/KafkaConnect/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/KafkaConnect/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/RedisConnect/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/RedisConnect/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/RedisConnect/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Test/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Test/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/Test/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/TopN/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/TopN/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/TopN/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/comMode/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/comMode/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/comMode/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/file.txt" charset="GBK" />
+    <file url="file://$PROJECT_DIR$/guosai/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/guosai/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/guosai/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/testttt/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/testttt/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/src/main/testttt/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/testtt/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/testtt/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/testtt/src/main/scala" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/utilImpl/src/main/java" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/utilImpl/src/main/resources" charset="UTF-8" />
+    <file url="file://$PROJECT_DIR$/utilImpl/src/main/scala" charset="UTF-8" />
+  </component>
+</project>

@@ -1,0 +1,103 @@
+package test.yangti.qingxi
+
+import org.apache.flink.api.common.eventtime.WatermarkStrategy
+import org.apache.flink.api.common.serialization.SimpleStringSchema
+import org.apache.flink.api.scala._
+import org.apache.flink.configuration.Configuration
+import org.apache.flink.connector.kafka.sink.{KafkaRecordSerializationSchema, KafkaSink, TopicSelector}
+import org.apache.flink.connector.kafka.source.KafkaSource
+import org.apache.flink.connector.kafka.source.enumerator.initializer.OffsetsInitializer
+import org.apache.flink.streaming.api.functions.sink.{RichSinkFunction, SinkFunction}
+import org.apache.flink.streaming.api.scala.{DataStream, StreamExecutionEnvironment}
+import org.apache.hadoop.hbase.client.{Connection, ConnectionFactory, Put, Table}
+import org.apache.hadoop.hbase.{HBaseConfiguration, HConstants, TableName}
+import org.json4s.JValue
+import org.json4s.jackson.JsonMethods
+
+import java.util.Properties
+
+object C_1_2 {
+  private val bigdata1 = "192.168.45.16"
+  def main(args: Array[String]): Unit = {
+
+    // 设置流执行环境
+    val env = StreamExecutionEnvironment.getExecutionEnvironment
+
+    // 设置使用处理时间
+    import org.apache.flink.streaming.api.TimeCharacteristic
+    env.setStreamTimeCharacteristic(TimeCharacteristic.ProcessingTime)
+
+    // 设置并行度
+    env.setParallelism(1)
+
+    // 启用检查点
+    env.enableCheckpointing(5000)
+
+    // kafka source
+    val kafkaSource = KafkaSource.builder[String]
+      .setBootstrapServers(s"${bigdata1}:9092")
+      .setTopics("ods_mall_log")
+      //      .setGroupId("group-test")
+      .setStartingOffsets(OffsetsInitializer.earliest)
+      .setValueOnlyDeserializer(new SimpleStringSchema)
+      .build()
+
+    // kafka sink
+    val properties = new Properties()
+    properties.setProperty("trans.timeout.ms", "7200000") // 2 hours
+
+    // KafkaSink 允许将记录流写入一个或多个 Kafka 主题。
+    val kafkaSink = KafkaSink.builder[String]
+      .setBootstrapServers(s"${bigdata1}:9092")
+      .setKafkaProducerConfig(properties)
+      .setRecordSerializer(KafkaRecordSerializationSchema.builder[String] //.builder()
+        .setTopicSelector(new TopicSelector[String] {
+          override def apply(t: String): String = {
+            if (true) "log_product_browse"
+            else null
+          }
+        })
+        .setValueSerializationSchema(new SimpleStringSchema)
+        .build()).build()
+
+    val data = env.fromSource(kafkaSource, WatermarkStrategy.noWatermarks[String], "kafka source")
+      .filter(line => line.contains("product_browse"))
+      .flatMap(l=>l.split(":"))
+      .filter(l=>l != "product_browse")
+
+    data.addSink(new writeHbase(bigdata1, "test", "product_browse", "info"))
+data.print()
+      data.sinkTo(kafkaSink)
+
+    env.execute("Task2")
+  }
+  private class writeHbase(zookeeper: String, namepace: String, table: String, family: String) extends RichSinkFunction[String] {
+    private var connection: Connection = _
+    private var htable: Table = _
+
+    override def open(parameters: Configuration): Unit = {
+      val hbaseConf = HBaseConfiguration.create()
+      hbaseConf.set(HConstants.ZOOKEEPER_QUORUM, zookeeper)
+      hbaseConf.set(HConstants.ZOOKEEPER_CLIENT_PORT, "2181")
+      connection = ConnectionFactory.createConnection(hbaseConf)
+      htable = connection.getTable(TableName.valueOf(namepace, table))
+    }
+
+    override def close(): Unit = {
+      if (connection != null) {
+        connection.close()
+      }
+      if (htable != null) {
+        htable.close()
+      }
+    }
+
+    override def invoke(value: String, context: SinkFunction.Context): Unit = {
+      val str: JValue = JsonMethods.parse(value, useBigDecimalForDouble = true)
+      val rowkey = scala.util.Random.nextInt().toString
+      val put = new Put(rowkey.getBytes())
+      put.addColumn(family.getBytes(), "data".getBytes(),value.toString.getBytes())
+      htable.put(put)
+    }
+  }
+}
